@@ -4,7 +4,7 @@
 #
 
 include $(TOPDIR)/rules.mk
-
+PKG_NAME:=luci-app-mproxy
 LUCI_TITLE:=LuCI support for Mproxy
 LUCI_DEPENDS:=+mproxy
 LUCI_PKGARCH:=all
