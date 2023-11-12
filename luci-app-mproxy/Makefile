@@ -4,14 +4,16 @@
 #
 
 include $(TOPDIR)/rules.mk
+
 PKG_NAME:=luci-app-mproxy
-LUCI_TITLE:=LuCI support for Mproxy
-LUCI_DEPENDS:=+mproxy
-LUCI_PKGARCH:=all
 PKG_VERSION:=1.0.1
 PKG_RELEASE:=1
 
-include ../../luci/luci.mk
+LUCI_TITLE:=LuCI support for Mproxy
+LUCI_PKGARCH:=all
+LUCI_DEPENDS:=+mproxy
+
+include $(TOPDIR)/feeds/luci/luci.mk
 
 # call BuildPackage - OpenWrt buildroot signature
 
