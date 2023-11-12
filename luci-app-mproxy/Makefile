@@ -8,8 +8,8 @@ include $(TOPDIR)/rules.mk
 LUCI_TITLE:=LuCI support for Mproxy
 LUCI_DEPENDS:=+mproxy
 LUCI_PKGARCH:=all
-PKG_VERSION:=1.0
-PKG_RELEASE:=3
+PKG_VERSION:=1.0.1
+PKG_RELEASE:=1
 
 include ../../luci/luci.mk
 
