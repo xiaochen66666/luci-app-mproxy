@@ -1,8 +1,8 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=mproxy
-PKG_VERSION=1.0.1
-PKG_RELEASE:=1
+PKG_VERSION=1.0
+PKG_RELEASE:=
 
 PKG_MAINTAINER:=lean
 PKG_LICENSE:=MIT
@@ -43,7 +43,6 @@ endef
 define Package/mproxy/install
 	$(INSTALL_DIR) $(1)/usr/bin
 	$(INSTALL_BIN) $(PKG_BUILD_DIR)/mproxy $(1)/usr/bin/mproxy
-        chmod 0750 $(1)/etc/init.d/mproxy
 endef
 
 $(eval $(call BuildPackage,mproxy))
