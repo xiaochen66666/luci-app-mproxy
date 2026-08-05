@@ -1,62 +1,89 @@
 name: Build
 
 on:
+  # 保留原有的标签触发
   push:
     tags:
       - v*.**
 
+  # 添加手动触发（workflow_dispatch）
+  workflow_dispatch:
+    inputs:
+      arch:
+        description: '目标架构'
+        required: true
+        default: 'mvebu-cortexa9'
+        type: choice
+        options:
+          - mvebu-cortexa9
+          - ramips-mt7621
+          - x86_64
+      sdk_version:
+        description: 'SDK版本'
+        required: true
+        default: '23.05.1'
+        type: choice
+        options:
+          - '23.05.1'
+          - '22.03.5'
+          - '21.02.7'
+      package:
+        description: '要构建的软件包（多个用空格分隔）'
+        required: true
+        default: 'luci-app-mproxy'
+
 jobs:
   build:
-    name: Build ${{ matrix.arch }}-${{ matrix.sdk }}
+    name: Build ${{ github.event.inputs.arch || matrix.arch }}
     runs-on: ubuntu-latest
-    # 关键：添加权限配置，允许GITHUB_TOKEN创建Release和上传文件
     permissions:
       contents: write
       packages: write
-    
+
     strategy:
       fail-fast: false
       matrix:
+        # 当手动触发时，使用workflow_dispatch的输入值
+        # 当标签触发时，使用默认值
         arch:
-          - arm_cortex-a9
-        sdk:
-          - openwrt-23.05.3
+          - ${{ github.event.inputs.arch || 'mvebu-cortexa9' }}
+        sdk_version:
+          - ${{ github.event.inputs.sdk_version || '23.05.1' }}
 
     steps:
-      # 更新到v4版本
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      # 构建OpenWrt包
       - name: Building packages
         uses: sbwml/openwrt-gh-action-sdk@go1.20
         env:
-          ARCH: ${{ matrix.arch }}-${{ matrix.sdk }}
+          CONTAINER: fasheng/openwrt-buildsdk
+          # 使用动态的ARCH格式
+          ARCH: ${{ matrix.sdk_version }}-${{ matrix.arch }}
           FEEDNAME: packages_ci
-          PACKAGES: luci-app-mproxy
+          # 支持手动输入多个包
+          PACKAGES: ${{ github.event.inputs.package || 'luci-app-mproxy' }}
           NO_REFRESH_CHECK: true
 
-      # 上传构建产物作为工作流工件（可在Actions页面下载）
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.arch }}
+          name: ${{ matrix.arch }}-${{ matrix.sdk_version }}
           path: bin/packages/${{ matrix.arch }}/packages_ci/*.ipk
-          # v4新增选项：如果文件不存在则忽略
           if-no-files-found: ignore
 
-      # 上传到GitHub Release（使用默认GITHUB_TOKEN）
       - name: Upload packages
         uses: ncipollo/release-action@v1.14.0
         with:
-          name: ${{ github.ref_name }}
-          token: ${{ secrets.GITHUB_TOKEN }}  # 使用GitHub自动提供的令牌
+          name: ${{ github.ref_name || format('manual-build-{0}', github.run_number) }}
+          token: ${{ secrets.GITHUB_TOKEN }}
           allowUpdates: true
           replacesArtifacts: true
           artifacts: "bin/packages/${{ matrix.arch }}/packages_ci/*.ipk"
-          # 可选：添加Release说明
+          # 如果是手动触发，添加说明
           body: |
-            自动构建的OpenWrt包
+            ${{ github.event.inputs.package && format('手动构建: {0}', github.event.inputs.package) || '自动标签构建' }}
             架构: ${{ matrix.arch }}
-            SDK: ${{ matrix.sdk }}
+            SDK版本: ${{ matrix.sdk_version }}
+            ${{ github.event.inputs.arch && format('触发者: {0}', github.actor) || '' }}
