@@ -21,28 +21,29 @@ on:
         required: true
         type: string
       arch:
-        description: '目标架构'
+        description: '目标架构，多个用空格分隔 (例如: arm_cortex-a9 aarch64_cortex-a72)'
         required: true
         default: 'arm_cortex-a9'
-        type: choice
-        options:
-          - arm_cortex-a9
+        type: string
       sdk:
-        description: 'OpenWrt版本'
+        description: 'OpenWrt版本，多个用空格分隔 (例如: openwrt-22.03 openwrt-23.05)'
         required: true
         default: 'openwrt-22.03'
-        type: choice
-        options:
-          - openwrt-22.03
+        type: string
 
 jobs:
+  # 使用矩阵策略，为每个架构和版本的组合创建并行任务
   build:
-    name: Build ${{ github.event.inputs.arch }}-${{ github.event.inputs.sdk }}
+    name: Build ${{ matrix.arch }}-${{ matrix.sdk }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
     strategy:
       fail-fast: false
+      matrix:
+        # 将用户输入的字符串按空格分割成数组
+        arch: ${{ fromJSON(format('["{0}"]', replace(github.event.inputs.arch, ' ', '","'))) }}
+        sdk: ${{ fromJSON(format('["{0}"]', replace(github.event.inputs.sdk, ' ', '","'))) }}
 
     steps:
       - name: 检出代码
@@ -53,9 +54,8 @@ jobs:
       - name: 构建软件包
         uses: sbwml/openwrt-gh-action-sdk@go1.20
         env:
-          # 动态组合 EXTRA_FEEDS
           EXTRA_FEEDS: ${{ format('src-git {0} {1}^{2}', github.event.inputs.feed_name, github.event.inputs.repo_url, github.event.inputs.branch) }}
-          ARCH: ${{ github.event.inputs.arch }}-${{ github.event.inputs.sdk }}
+          ARCH: ${{ matrix.arch }}-${{ matrix.sdk }}
           FEEDNAME: packages_ci
           PACKAGES: ${{ github.event.inputs.package_name }}
           NO_REFRESH_CHECK: true
@@ -63,19 +63,19 @@ jobs:
       - name: 上传编译产物 (Artifacts)
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ github.event.inputs.arch }}
-          path: bin/packages/${{ github.event.inputs.arch }}/packages_ci/*.ipk
+          name: ${{ matrix.arch }}-${{ matrix.sdk }}
+          path: bin/packages/${{ matrix.arch }}/packages_ci/*.ipk
           if-no-files-found: ignore
 
       - name: 设置 Release 标签
         id: release_tag
         run: |
           if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            echo "tag=manual-build-${{ github.run_number }}" >> $GITHUB_OUTPUT
-            echo "name=Manual Build #${{ github.run_number }} (${{ github.event.inputs.arch }}-${{ github.event.inputs.sdk }})" >> $GITHUB_OUTPUT
+            echo "tag=manual-build-${{ github.run_number }}-${{ matrix.arch }}-${{ matrix.sdk }}" >> $GITHUB_OUTPUT
+            echo "name=Manual Build #${{ github.run_number }} (${{ matrix.arch }}-${{ matrix.sdk }})" >> $GITHUB_OUTPUT
           else
-            echo "tag=${{ github.ref_name }}" >> $GITHUB_OUTPUT
-            echo "name=${{ github.ref_name }}" >> $GITHUB_OUTPUT
+            echo "tag=${{ github.ref_name }}-${{ matrix.arch }}-${{ matrix.sdk }}" >> $GITHUB_OUTPUT
+            echo "name=${{ github.ref_name }} (${{ matrix.arch }}-${{ matrix.sdk }})" >> $GITHUB_OUTPUT
           fi
 
       - name: 上传到 Release
@@ -86,4 +86,4 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           allowUpdates: true
           replacesArtifacts: true
-          artifacts: "bin/packages/${{ github.event.inputs.arch }}/packages_ci/*.ipk"
+          artifacts: "bin/packages/${{ matrix.arch }}/packages_ci/*.ipk"
