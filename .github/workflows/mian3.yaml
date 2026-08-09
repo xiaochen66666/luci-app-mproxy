@@ -53,8 +53,8 @@ jobs:
       - name: 构建软件包
         uses: sbwml/openwrt-gh-action-sdk@go1.20
         env:
-          # 动态组合 EXTRA_FEEDS
-          EXTRA_FEEDS: ${{ format('src-git {0} {1}^{2}', github.event.inputs.feed_name, github.event.inputs.repo_url, github.event.inputs.branch) }}
+          # 改用直接拼接方式，避免 format 函数可能带来的换行问题
+          EXTRA_FEEDS: src-git ${{ github.event.inputs.feed_name }} ${{ github.event.inputs.repo_url }}^{{ github.event.inputs.branch }}
           ARCH: ${{ github.event.inputs.arch }}-${{ github.event.inputs.sdk }}
           FEEDNAME: packages_ci
           PACKAGES: ${{ github.event.inputs.package_name }}
