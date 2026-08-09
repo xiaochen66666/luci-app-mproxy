@@ -1,4 +1,4 @@
-name: Build Custom Package with Custom Feed
+name: 自定义插件编译
 
 on:
   workflow_dispatch:
