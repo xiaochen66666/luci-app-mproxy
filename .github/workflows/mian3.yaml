@@ -1,4 +1,4 @@
-name: 自定义插件编译
+name: Build Custom Package with Custom Feed
 
 on:
   workflow_dispatch:
@@ -32,18 +32,38 @@ on:
         type: string
 
 jobs:
-  # 使用矩阵策略，为每个架构和版本的组合创建并行任务
+  # 第一步：解析输入，生成矩阵
+  setup:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+    steps:
+      - name: 生成矩阵配置
+        id: set-matrix
+        run: |
+          # 将空格分隔的字符串转为JSON数组
+          ARCH_JSON=$(echo '${{ github.event.inputs.arch }}' | sed 's/ /","/g' | sed 's/^/["/' | sed 's/$/"]/')
+          SDK_JSON=$(echo '${{ github.event.inputs.sdk }}' | sed 's/ /","/g' | sed 's/^/["/' | sed 's/$/"]/')
+          
+          # 生成完整的矩阵JSON
+          MATRIX_JSON=$(jq -n \
+            --argjson arch "$ARCH_JSON" \
+            --argjson sdk "$SDK_JSON" \
+            '{arch: $arch, sdk: $sdk}')
+          
+          echo "matrix=$MATRIX_JSON" >> $GITHUB_OUTPUT
+          echo "生成的矩阵: $MATRIX_JSON"
+
+  # 第二步：使用矩阵并行编译
   build:
     name: Build ${{ matrix.arch }}-${{ matrix.sdk }}
     runs-on: ubuntu-latest
+    needs: setup
     permissions:
       contents: write
     strategy:
       fail-fast: false
-      matrix:
-        # 将用户输入的字符串按空格分割成数组
-        arch: ${{ fromJSON(format('["{0}"]', replace(github.event.inputs.arch, ' ', '","'))) }}
-        sdk: ${{ fromJSON(format('["{0}"]', replace(github.event.inputs.sdk, ' ', '","'))) }}
+      matrix: ${{ fromJSON(needs.setup.outputs.matrix) }}
 
     steps:
       - name: 检出代码
@@ -87,4 +107,3 @@ jobs:
           allowUpdates: true
           replacesArtifacts: true
           artifacts: "bin/packages/${{ matrix.arch }}/packages_ci/*.ipk"
-
