@@ -1,0 +1,89 @@
+name: Build Custom Package with Custom Feed
+
+on:
+  workflow_dispatch:
+    inputs:
+      feed_name:
+        description: 'Feed源名称(多个用|分隔，例如: feed1|feed2)'
+        required: true
+        type: string
+      repo_url:
+        description: '仓库地址(多个用|分隔，例如: url1|url2)'
+        required: true
+        type: string
+      branch:
+        description: '分支(多个用|分隔，例如: main|openwrt-22.03)'
+        required: true
+        default: 'main'
+        type: string
+      package_name:
+        description: '要编译的插件包名，多个用空格分隔 (例如: luci-app-mproxy luci-app-ddns)'
+        required: true
+        type: string
+      arch:
+        description: '目标架构'
+        required: true
+        default: 'arm_cortex-a9'
+        type: choice
+        options:
+          - arm_cortex-a9
+      sdk:
+        description: 'OpenWrt版本'
+        required: true
+        default: 'openwrt-22.03'
+        type: choice
+        options:
+          - openwrt-22.03
+
+jobs:
+  build:
+    name: Build ${{ github.event.inputs.arch }}-${{ github.event.inputs.sdk }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: 构建软件包
+        uses: sbwml/openwrt-gh-action-sdk@go1.20
+        env:
+          # 动态组合 EXTRA_FEEDS
+          EXTRA_FEEDS: ${{ format('src-git {0} {1}^{2}', github.event.inputs.feed_name, github.event.inputs.repo_url, github.event.inputs.branch) }}
+          ARCH: ${{ github.event.inputs.arch }}-${{ github.event.inputs.sdk }}
+          FEEDNAME: packages_ci
+          PACKAGES: ${{ github.event.inputs.package_name }}
+          NO_REFRESH_CHECK: true
+
+      - name: 上传编译产物 (Artifacts)
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ github.event.inputs.arch }}
+          path: bin/packages/${{ github.event.inputs.arch }}/packages_ci/*.ipk
+          if-no-files-found: ignore
+
+      - name: 设置 Release 标签
+        id: release_tag
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            echo "tag=manual-build-${{ github.run_number }}" >> $GITHUB_OUTPUT
+            echo "name=Manual Build #${{ github.run_number }} (${{ github.event.inputs.arch }}-${{ github.event.inputs.sdk }})" >> $GITHUB_OUTPUT
+          else
+            echo "tag=${{ github.ref_name }}" >> $GITHUB_OUTPUT
+            echo "name=${{ github.ref_name }}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: 上传到 Release
+        uses: ncipollo/release-action@v1
+        with:
+          name: ${{ steps.release_tag.outputs.name }}
+          tag: ${{ steps.release_tag.outputs.tag }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+          allowUpdates: true
+          replacesArtifacts: true
+          artifacts: "bin/packages/${{ github.event.inputs.arch }}/packages_ci/*.ipk"
